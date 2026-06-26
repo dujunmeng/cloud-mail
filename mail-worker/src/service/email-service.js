@@ -3,6 +3,7 @@ import email from '../entity/email';
 import { attConst, emailConst, isDel, settingConst } from '../const/entity-const';
 import { and, desc, eq, gt, inArray, lt, count, asc, sql, ne, or, like, lte, gte } from 'drizzle-orm';
 import { star } from '../entity/star';
+import { dailyCount } from '../entity/daily-count';
 import settingService from './setting-service';
 import accountService from './account-service';
 import BizError from '../error/biz-error';
@@ -362,15 +363,14 @@ const emailService = {
 		}
 
 		const dateStr = dayjs().format('YYYY-MM-DD');
-		let daySendTotal = await c.env.kv.get(kvConst.SEND_DAY_COUNT + dateStr);
 
 		//记录每天发件次数统计
-		if (!daySendTotal) {
-			await c.env.kv.put(kvConst.SEND_DAY_COUNT + dateStr, JSON.stringify(receiveEmail.length), { expirationTtl: 60 * 60 * 24 });
-		} else  {
-			daySendTotal = Number(daySendTotal) + receiveEmail.length
-			await c.env.kv.put(kvConst.SEND_DAY_COUNT + dateStr, JSON.stringify(daySendTotal), { expirationTtl: 60 * 60 * 24 });
-		}
+		await orm(c).insert(dailyCount).values({ date: dateStr, count: receiveEmail.length })
+			.onConflictDoUpdate({
+				target: dailyCount.date,
+				set: { count: sql`${dailyCount.count} + ${receiveEmail.length}` }
+			})
+			.run();
 
 		return [ emailResult ];
 	},

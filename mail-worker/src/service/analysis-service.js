@@ -4,6 +4,8 @@ import email from '../entity/email';
 import { desc, count, eq, and, ne, isNotNull } from 'drizzle-orm';
 import { emailConst } from '../const/entity-const';
 import kvConst from '../const/kv-const';
+import { dailyCount } from '../entity/daily-count';
+import { analysisCache } from '../entity/analysis-cache';
 import dayjs from 'dayjs';
 import { toUtc } from '../utils/date-uitil';
 const analysisService = {
@@ -14,7 +16,8 @@ const analysisService = {
 		}
 
 		const cacheKey = this.echartsCacheKey(params);
-		const cache = await c.env.kv.get(cacheKey, { type: 'json' });
+		const cacheRow = await orm(c).select().from(analysisCache).where(eq(analysisCache.cacheKey, cacheKey)).get();
+	const cache = cacheRow ? JSON.parse(cacheRow.data) : null;
 
 		if (cache) {
 			return cache;
@@ -26,7 +29,7 @@ const analysisService = {
 	async refreshEchartsCacheByKey(c, cacheKey) {
 		const params = this.echartsParamsByCacheKey(cacheKey);
 		const data = await this.queryEcharts(c, params);
-		await c.env.kv.put(cacheKey, JSON.stringify(data));
+		await orm(c).insert(analysisCache).values({ cacheKey, data: JSON.stringify(data), updatedAt: dayjs().format('YYYY-MM-DD HH:mm:ss') }).onConflictDoUpdate({ target: analysisCache.cacheKey, set: { data: JSON.stringify(data), updatedAt: dayjs().format('YYYY-MM-DD HH:mm:ss') } }).run();
 		return data;
 	},
 
@@ -35,9 +38,9 @@ const analysisService = {
 			return;
 		}
 
-		const { keys } = await c.env.kv.list({ prefix: kvConst.ANALYSIS_ECHARTS });
+		const rows = await orm(c).select({ cacheKey: analysisCache.cacheKey }).from(analysisCache).all();
 
-		await Promise.all(keys.map(key => this.refreshEchartsCacheByKey(c, key.name)));
+		await Promise.all(rows.map(row => this.refreshEchartsCacheByKey(c, row.cacheKey)));
 	},
 
 	async queryEcharts(c, params) {
@@ -79,7 +82,7 @@ const analysisService = {
 			analysisDao.receiveDayCount(c, diffHours),
 			analysisDao.sendDayCount(c, diffHours),
 
-			c.env.kv.get(kvConst.SEND_DAY_COUNT + dayjs().format('YYYY-MM-DD')),
+			orm(c).select().from(dailyCount).where(eq(dailyCount.date, dayjs().format('YYYY-MM-DD'))).get().then(r => r?.count || 0),
 		]);
 
 

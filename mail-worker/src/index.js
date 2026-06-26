@@ -1,6 +1,7 @@
 import app from './hono/webs';
 import { email } from './email/email';
 import userService from './service/user-service';
+import sessionService from './service/session-service';
 import verifyRecordService from './service/verify-record-service';
 import emailService from './service/email-service';
 import kvObjService from './service/kv-obj-service';
@@ -30,6 +31,7 @@ export default {
 			return;
 		}
 
+		await sessionService.cleanupExpired({ env })
 		await verifyRecordService.clearRecord({ env })
 		await userService.resetDaySendCount({ env })
 		await emailService.completeReceiveAll({ env })

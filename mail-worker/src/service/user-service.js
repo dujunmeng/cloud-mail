@@ -1,3 +1,4 @@
+import sessionService from '../service/session-service';
 import BizError from '../error/biz-error';
 import accountService from './account-service';
 import orm from '../entity/orm';
@@ -96,7 +97,7 @@ const userService = {
 
 	async delete(c, userId) {
 		await orm(c).update(user).set({ isDel: isDel.DELETE }).where(eq(user.userId, userId)).run();
-		await c.env.kv.delete(kvConst.AUTH_INFO + userId)
+		await sessionService.remove(c, userId)
 	},
 
 	async physicsDelete(c, params) {
@@ -250,7 +251,7 @@ const userService = {
 
 		const { password, userId } = params;
 		await this.resetPassword(c, { password }, userId);
-		await c.env.kv.delete(KvConst.AUTH_INFO + userId);
+		await sessionService.remove(c, userId);
 	},
 
 	async setStatus(c, params) {
@@ -264,7 +265,7 @@ const userService = {
 			.run();
 
 		if (status === userConst.status.BAN) {
-			await c.env.kv.delete(KvConst.AUTH_INFO + userId);
+			await sessionService.remove(c, userId);
 		}
 	},
 

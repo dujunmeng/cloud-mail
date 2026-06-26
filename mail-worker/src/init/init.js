@@ -29,6 +29,8 @@ const dbInit = {
 		await this.v2_8DB(c);
 		await this.v2_9DB(c);
 		await this.v3_0DB(c);
+		await this.v3_1DB(c);
+		await this.v3_2DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
 	},
@@ -613,6 +615,58 @@ const dbInit = {
 			console.warn(e)
 		}
 
+	},
+
+
+
+	async v3_1DB(c) {
+		try {
+			await c.env.db.batch([
+				c.env.db.prepare(`CREATE TABLE IF NOT EXISTS session (
+					user_id INTEGER PRIMARY KEY,
+					tokens TEXT NOT NULL DEFAULT '[]',
+					user_data TEXT NOT NULL DEFAULT '{}',
+					refresh_time TEXT NOT NULL DEFAULT '',
+					expire_time TEXT NOT NULL DEFAULT ''
+				)`),
+				c.env.db.prepare(`CREATE TABLE IF NOT EXISTS daily_count (
+					date TEXT NOT NULL PRIMARY KEY,
+					count INTEGER NOT NULL DEFAULT 0
+				)`),
+				c.env.db.prepare(`CREATE TABLE IF NOT EXISTS analysis_cache (
+					cache_key TEXT NOT NULL PRIMARY KEY,
+					data TEXT NOT NULL DEFAULT '{}',
+					updated_at TEXT NOT NULL DEFAULT ''
+				)`),
+				c.env.db.prepare(`CREATE TABLE IF NOT EXISTS config (
+					config_key TEXT NOT NULL PRIMARY KEY,
+					config_value TEXT NOT NULL DEFAULT ''
+				)`),
+				c.env.db.prepare(`INSERT OR IGNORE INTO config (config_key, config_value) VALUES ('public_key', '')`),
+			]);
+		} catch (e) {
+			console.warn(`跳过建表：${e.message}`);
+		}
+	},
+
+
+
+	async v3_2DB(c) {
+		try {
+			// 清理 verify_record 表的重复数据，保留每个 (ip,type) 的最新一条
+			await c.env.db.prepare(`DELETE FROM verify_record WHERE vr_id NOT IN (
+				SELECT MIN(vr_id) FROM verify_record GROUP BY ip, type
+			)`).run();
+		} catch (e) {
+			console.warn(`跳过清理重复数据：${e.message}`);
+		}
+
+		try {
+			// 添加唯一索引，防止并发注册导致重复行
+			await c.env.db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_verify_ip_type ON verify_record(ip, type)`).run();
+		} catch (e) {
+			console.warn(`跳过唯一索引：${e.message}`);
+		}
 	},
 
 	async receiveEmailToRecipient(c) {

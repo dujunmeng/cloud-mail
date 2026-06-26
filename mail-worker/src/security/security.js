@@ -1,11 +1,15 @@
 import BizError from '../error/biz-error';
 import constant from '../const/constant';
 import jwtUtils from '../utils/jwt-utils';
+import orm from '../entity/orm';
+import { eq } from 'drizzle-orm';
 import KvConst from '../const/kv-const';
 import dayjs from 'dayjs';
 import userService from '../service/user-service';
 import permService from '../service/perm-service';
+import sessionService from '../service/session-service';
 import { t } from '../i18n/i18n'
+import { config } from '../entity/config';
 import app from '../hono/hono';
 
 const exclude = [
@@ -103,7 +107,8 @@ app.use('*', async (c, next) => {
 
 	if (path.startsWith('/public')) {
 
-		const userPublicToken = await c.env.kv.get(KvConst.PUBLIC_KEY);
+		const configRow = await orm(c).select().from(config).where(eq(config.configKey, 'public_key')).get();
+	const userPublicToken = configRow?.configValue || '';
 		const publicToken = c.req.header(constant.TOKEN_HEADER);
 		if (publicToken !== userPublicToken) {
 			throw new BizError(t('publicTokenFail'), 401);
@@ -121,7 +126,7 @@ app.use('*', async (c, next) => {
 	}
 
 	const { userId, token } = result;
-	const authInfo = await c.env.kv.get(KvConst.AUTH_INFO + userId, { type: 'json' });
+	const authInfo = await sessionService.get(c, userId);
 
 	if (!authInfo) {
 		throw new BizError(t('authExpired'), 401);
@@ -157,7 +162,7 @@ app.use('*', async (c, next) => {
 	if (!nowTime.isSame(refreshTime)) {
 		authInfo.refreshTime = dayjs().toISOString();
 		await userService.updateUserInfo(c, authInfo.user.userId);
-		await c.env.kv.put(KvConst.AUTH_INFO + userId, JSON.stringify(authInfo), { expirationTtl: constant.TOKEN_EXPIRE });
+		await sessionService.set(c, userId, authInfo);
 	}
 
 	c.set('user',authInfo.user)

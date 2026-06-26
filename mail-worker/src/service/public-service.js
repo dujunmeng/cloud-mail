@@ -12,6 +12,7 @@ import reqUtils from '../utils/req-utils';
 import dayjs from 'dayjs';
 import { isDel, roleConst } from '../const/entity-const';
 import email from '../entity/email';
+import { config } from '../entity/config';
 import userService from './user-service';
 import KvConst from '../const/kv-const';
 
@@ -166,7 +167,7 @@ const publicService = {
 
 		const uuid = uuidv4();
 
-		await c.env.kv.put(KvConst.PUBLIC_KEY, uuid);
+		await orm(c).update(config).set({ configValue: uuid }).where(eq(config.configKey, 'public_key')).run();
 
 		return {token: uuid}
 	},

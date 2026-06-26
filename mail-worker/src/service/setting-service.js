@@ -1,4 +1,3 @@
-import KvConst from '../const/kv-const';
 import setting from '../entity/setting';
 import orm from '../entity/orm';
 import {verifyRecordType} from '../const/entity-const';
@@ -16,7 +15,6 @@ const settingService = {
 		const settingRow = await orm(c).select().from(setting).get();
 		settingRow.resendTokens = JSON.parse(settingRow.resendTokens);
 		c.set('setting', settingRow);
-		await c.env.kv.put(KvConst.SETTING, JSON.stringify(settingRow));
 	},
 
 	async query(c) {
@@ -25,11 +23,13 @@ const settingService = {
 			return c.get('setting')
 		}
 
-		const setting = await c.env.kv.get(KvConst.SETTING, { type: 'json' });
+		const settingRow = await orm(c).select().from(setting).get();
 
-		if (!setting) {
+		if (!settingRow) {
 			throw new BizError('数据库未初始化 Database not initialized.');
 		}
+
+		settingRow.resendTokens = JSON.parse(settingRow.resendTokens);
 
 		let domainList = c.env.domain;
 
@@ -46,7 +46,7 @@ const settingService = {
 		}
 
 		domainList = domainList.map(item => '@' + item);
-		setting.domainList = domainList;
+		settingRow.domainList = domainList;
 
 
 		let linuxdoSwitch = c.env.linuxdo_switch;
@@ -68,16 +68,16 @@ const settingService = {
 			projectLink = true
 		}
 
-		setting.projectLink = projectLink;
+		settingRow.projectLink = projectLink;
 
-		setting.linuxdoClientId = c.env.linuxdo_client_id;
-		setting.linuxdoCallbackUrl = c.env.linuxdo_callback_url;
-		setting.linuxdoSwitch = linuxdoSwitch;
+		settingRow.linuxdoClientId = c.env.linuxdo_client_id;
+		settingRow.linuxdoCallbackUrl = c.env.linuxdo_callback_url;
+		settingRow.linuxdoSwitch = linuxdoSwitch;
 
-		setting.emailPrefixFilter = setting.emailPrefixFilter.split(",").filter(Boolean);
+		settingRow.emailPrefixFilter = settingRow.emailPrefixFilter.split(",").filter(Boolean);
 
-		c.set?.('setting', setting);
-		return setting;
+		c.set?.('setting', settingRow);
+		return settingRow;
 	},
 
 	async get(c, showSiteKey = false) {
